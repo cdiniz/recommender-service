@@ -1,11 +1,14 @@
 package recommender
 
-import java.nio.file.Path
-
 import akka.actor.{Actor, ActorLogging}
+import akka.pattern.ask
+import akka.util.Timeout
 import org.apache.spark.mllib.recommendation.MatrixFactorizationModel
 import recommender.Recommender.{GenerateRecommendations, Recommendation, Recommendations}
-import utils.{Configuration, SparkModule}
+import recommender.RecommenderTrainer.Train
+import utils.{Configuration, RecommendationsModule, SparkModule}
+
+import scala.concurrent.duration._
 
 object Recommender {
   case class GenerateRecommendations(userId: Int, options: Int)
@@ -16,12 +19,13 @@ object Recommender {
 
 }
 
-class Recommender(modules: Configuration with SparkModule) extends Actor with ActorLogging {
-
+class Recommender(modules: Configuration with SparkModule with RecommendationsModule) extends Actor with ActorLogging {
+  implicit val timeout: Timeout = 120 seconds
   var model: Option[MatrixFactorizationModel] = None
 
   private def loadModel(): Unit = {
-    //this.model = Some(MatrixFactorizationModel.load(modules.sc,"file://src/main/resources/model"))
+   //modules.trainerActor ? Train
+   //this.model = Some(MatrixFactorizationModel.load(modules.spark().sparkContext,"src/main/resources/model/"))
   }
 
   private def generateRecommendations(userId: Int, options: Int): Recommendations = {
@@ -43,7 +47,8 @@ class Recommender(modules: Configuration with SparkModule) extends Actor with Ac
 
   override def receive: Receive = {
     case GenerateRecommendations(userId, options) =>
-      sender() ! generateRecommendations(userId, options)
+      val sdr = sender()
+      sdr ! (generateRecommendations(userId, options))
   }
 
 }
