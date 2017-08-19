@@ -1,14 +1,14 @@
 package recommender
 
 import akka.actor.{Actor, ActorLogging}
-import org.apache.spark.mllib.recommendation.{ALS, Rating}
+import org.apache.spark.mllib.recommendation.{ALS, MatrixFactorizationModel, Rating}
 import org.apache.spark.rdd.RDD
 import recommender.RecommenderTrainer.{ModelUpdated, Train}
 import utils.{Configuration, RecommendationsModule, SparkModule}
 
 object RecommenderTrainer {
   case object Train
-  case object ModelUpdated
+  case class ModelUpdated(model : MatrixFactorizationModel)
 }
 
 class RecommenderTrainer(modules: Configuration with SparkModule with RecommendationsModule) extends Actor with ActorLogging {
@@ -25,9 +25,9 @@ class RecommenderTrainer(modules: Configuration with SparkModule with Recommenda
 
     val numRatings = ratings.count()
     val numUsers = ratings.map(_.user).distinct().count()
-    val numMovies = ratings.map(_.product).distinct().count()
+    val numProducts = ratings.map(_.product).distinct().count()
 
-    println(s"Got $numRatings ratings from $numUsers users on $numMovies movies.")
+    println(s"Got $numRatings ratings from $numUsers users on $numProducts products.")
 
     val splits = ratings.randomSplit(Array(0.8, 0.2))
     val training = splits(0).cache()
@@ -52,8 +52,7 @@ class RecommenderTrainer(modules: Configuration with SparkModule with Recommenda
       .setImplicitPrefs(implicitPrefs)
       .run(training)
 
-    model.save(sc,"src/main/resources/model")
-    sdr ! ModelUpdated
+    sdr ! ModelUpdated(model)
   }
 
 }

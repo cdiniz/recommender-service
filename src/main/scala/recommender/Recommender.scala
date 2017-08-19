@@ -5,9 +5,10 @@ import akka.pattern.ask
 import akka.util.Timeout
 import org.apache.spark.mllib.recommendation.MatrixFactorizationModel
 import recommender.Recommender.{GenerateRecommendations, Recommendation, Recommendations}
-import recommender.RecommenderTrainer.Train
+import recommender.RecommenderTrainer.{ModelUpdated, Train}
 import utils.{Configuration, RecommendationsModule, SparkModule}
 
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 
 object Recommender {
@@ -24,8 +25,9 @@ class Recommender(modules: Configuration with SparkModule with RecommendationsMo
   var model: Option[MatrixFactorizationModel] = None
 
   private def loadModel(): Unit = {
-   //modules.trainerActor ? Train
-   //this.model = Some(MatrixFactorizationModel.load(modules.spark().sparkContext,"src/main/resources/model/"))
+    (modules.trainerActor ? Train).mapTo[ModelUpdated].onSuccess { case ModelUpdated(m) =>
+      model = Some(m)
+    }
   }
 
   private def generateRecommendations(userId: Int, options: Int): Recommendations = {
@@ -39,13 +41,12 @@ class Recommender(modules: Configuration with SparkModule with RecommendationsMo
     Recommendations(results)
   }
 
-
   override def preStart(): Unit = {
     super.preStart()
     loadModel()
   }
 
-  override def receive: Receive = {
+  override def receive : Receive = {
     case GenerateRecommendations(userId, options) =>
       val sdr = sender()
       sdr ! (generateRecommendations(userId, options))
